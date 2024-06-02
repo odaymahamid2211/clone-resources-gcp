@@ -1,7 +1,7 @@
 import logging
 from google.cloud import compute_v1
 from GetDetails import GetDetails
-
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 class VMCreator:
     def __init__(self, target_project):
