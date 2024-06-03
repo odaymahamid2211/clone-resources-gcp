@@ -10,11 +10,19 @@ class VMCreator:
 
     def clone_instances_to_target_project(self, instances_details, default_source_image=None):
         for instance_detail in instances_details:
+            if "gke" in instance_detail['name'].lower():
+                logging.info(f"Skipping instance {instance_detail['name']} as it contains 'gke'")
+                continue
             self.create_vm_instance(instance_detail, default_source_image)
 
     logging.basicConfig(level=logging.INFO)
 
     def create_vm_instance(self, instance_detail, default_source_image=None):
+        """"
+        TODO:
+        check for gke named mahcines
+        """
+
         zone = instance_detail['zone']
         project = self.target_project
 
