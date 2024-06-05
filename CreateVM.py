@@ -18,10 +18,6 @@ class VMCreator:
     logging.basicConfig(level=logging.INFO)
 
     def create_vm_instance(self, instance_detail, default_source_image=None):
-        """"
-        TODO:
-        check for gke named mahcines
-        """
 
         zone = instance_detail['zone']
         project = self.target_project
@@ -34,9 +30,6 @@ class VMCreator:
         disks = []
         for disk in instance_detail['disks']:
             disk_type = disk['type']
-            if disk_type == 'PERSISTENT':
-                disk_type = 'pd-standard'
-
             disk_size_gb = disk['diskSizeGb']
             device_name = disk['deviceName']
 

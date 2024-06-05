@@ -1,11 +1,13 @@
 import logging
 from google.cloud import asset_v1
+from google.cloud import compute_v1
 
 
 class GetDetails:
     def __init__(self, source_project):
         self.source_project = source_project
         self.asset_client = asset_v1.AssetServiceClient()
+        self.compute_client = compute_v1.DisksClient()
 
     def format_network_interfaces(self, network_interfaces):
         formatted_interfaces = []
@@ -17,16 +19,37 @@ class GetDetails:
             formatted_interfaces.append(ni_details)
         return formatted_interfaces
 
-    def format_disks(self, disks):
+    def get_disk_type(self, zone, disk_name):
+        try:
+            disk = self.compute_client.get(project=self.source_project, zone=zone, disk=disk_name)
+            return disk.type.split('/')[-1]
+        except Exception as e:
+            logging.error(f"Failed to get disk type for {disk_name} in zone {zone}: {e}")
+            return 'N/A'
+
+    def get_disk_image(self, disk_name, zone):
+        try:
+            disk = self.compute_client.get(project=self.source_project, zone=zone, disk=disk_name)
+            return disk.source_image.split('/')[-1] if disk.source_image else 'N/A'
+        except Exception as e:
+            logging.error(f"Failed to get disk image for {disk_name} in zone {zone}: {e}")
+            return 'N/A'
+
+    def format_disks(self, disks, zone):
         formatted_disks = []
         for disk in disks:
+            device_name = disk.get('deviceName', 'N/A')
+            disk_name = disk.get('source', '').split('/')[-1]
+            disk_type = self.get_disk_type(zone, disk_name) if disk_name != '' else 'N/A'
+            disk_image = self.get_disk_image(disk_name, zone) if disk_name != '' else 'N/A'
             disk_details = {
-                'type': disk.get('type', 'N/A').split('/')[-1],
-                'deviceName': disk.get('deviceName', 'N/A'),
+                'type': disk_type,
+                'deviceName': device_name,
                 'mode': disk.get('mode', 'N/A'),
                 'boot': disk.get('boot', 'N/A'),
                 'interface': disk.get('interface', 'N/A'),
-                'diskSizeGb': disk.get('diskSizeGb', 10)  # Include disk size
+                'diskSizeGb': disk.get('diskSizeGb', 10),  # Include disk size
+                'image': disk_image,
             }
             formatted_disks.append(disk_details)
         return formatted_disks
@@ -47,13 +70,14 @@ class GetDetails:
             for asset in response:
                 instance_details = {}
                 if asset.resource:
+                    zone = asset.resource.data.get('zone', 'N/A').split('/')[-1]
                     instance_details = {
                         'name': asset.resource.data.get('name', 'N/A'),
-                        'zone': asset.resource.data.get('zone', 'N/A').split('/')[-1],
+                        'zone': zone,
                         'machine_type': asset.resource.data.get('machineType', 'N/A').split('/')[-1],
                         'network_interfaces': self.format_network_interfaces(
                             asset.resource.data.get('networkInterfaces', [])),
-                        'disks': self.format_disks(asset.resource.data.get('disks', [])),
+                        'disks': self.format_disks(asset.resource.data.get('disks', []), zone),
                     }
                 else:
                     instance_details = {
@@ -68,13 +92,13 @@ class GetDetails:
 
         return instance_details_list
 
+
 if __name__ == '__main__':
-    # Set the logging level to INFO
+
     logging.basicConfig(level=logging.INFO)
     source_project = 'wideops-support-393412'
     get_details = GetDetails(source_project)
     instance_details_list = get_details.get_instance_details()
 
-    # Print the instance details
     for instance_details in instance_details_list:
         print(instance_details)
