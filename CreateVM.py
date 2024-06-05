@@ -67,7 +67,7 @@ class VMCreator:
             operation.result()
             logging.info(f"Instance {instance_detail['name']} created successfully.")
         except Exception as e:
-            logging.error(f"An error occurred while creating the instance: {e}")
+            logging.error(f"An error occurred while creating the instance '{instance_detail['name']}' :  {e}")
 
 
 if __name__ == '__main__':
