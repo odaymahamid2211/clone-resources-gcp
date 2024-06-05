@@ -30,7 +30,7 @@ class GetDetails:
     def get_disk_image(self, disk_name, zone):
         try:
             disk = self.compute_client.get(project=self.source_project, zone=zone, disk=disk_name)
-            return disk.source_image.split('/')[-1] if disk.source_image else 'N/A'
+            return disk.source_image if disk.source_image else 'N/A'
         except Exception as e:
             logging.error(f"Failed to get disk image for {disk_name} in zone {zone}: {e}")
             return 'N/A'

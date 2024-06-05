@@ -8,30 +8,30 @@ class VMCreator:
         self.target_project = target_project
         self.compute_client = compute_v1.InstancesClient()
 
-    def clone_instances_to_target_project(self, instances_details, default_source_image=None):
+    def clone_instances_to_target_project(self, instances_details):
         for instance_detail in instances_details:
             if "gke" in instance_detail['name'].lower():
                 logging.info(f"Skipping instance {instance_detail['name']} as it contains 'gke'")
                 continue
-            self.create_vm_instance(instance_detail, default_source_image)
+            self.create_vm_instance(instance_detail)
 
     logging.basicConfig(level=logging.INFO)
 
-    def create_vm_instance(self, instance_detail, default_source_image=None):
-
+    def create_vm_instance(self, instance_detail):
         zone = instance_detail['zone']
         project = self.target_project
 
         region = '-'.join(zone.split('-')[:-1])
-
-        if default_source_image is None:
-            default_source_image = "projects/debian-cloud/global/images/family/debian-10"
 
         disks = []
         for disk in instance_detail['disks']:
             disk_type = disk['type']
             disk_size_gb = disk['diskSizeGb']
             device_name = disk['deviceName']
+            source_image = disk['image']  # Use the provided image for each disk
+
+            if source_image != 'N/A':
+                source_image = f"projects/{source_image.split('/')[-4]}/global/images/{source_image.split('/')[-1]}"
 
             disk_config = {
                 'boot': disk['boot'],
@@ -39,11 +39,15 @@ class VMCreator:
                 'initialize_params': {
                     'disk_type': f"projects/{self.target_project}/zones/{zone}/diskTypes/{disk_type}",
                     'disk_size_gb': disk_size_gb,
+                    'source_image': source_image if source_image != 'N/A' else None
                 },
                 'device_name': device_name
             }
-            if disk['boot']:
-                disk_config['initialize_params']['source_image'] = default_source_image
+
+            # Remove source_image if it is 'N/A' to avoid errors
+            if disk_config['initialize_params']['source_image'] is None:
+                del disk_config['initialize_params']['source_image']
+
             disks.append(disk_config)
 
         instance_body = {
@@ -75,4 +79,3 @@ if __name__ == '__main__':
 
     vm_creator = VMCreator(target_project=target_project_id)
     vm_creator.clone_instances_to_target_project(instances_details)
-
