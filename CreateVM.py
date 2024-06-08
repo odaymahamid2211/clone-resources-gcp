@@ -29,6 +29,7 @@ class VMCreator:
             disk_size_gb = disk['diskSizeGb']
             device_name = disk['deviceName']
             source_image = disk['image']  # Use the provided image for each disk
+            disk_name = disk['diskName']  # Include disk name
 
             if source_image != 'N/A':
                 source_image = f"projects/{source_image.split('/')[-4]}/global/images/{source_image.split('/')[-1]}"
@@ -37,6 +38,7 @@ class VMCreator:
                 'boot': disk['boot'],
                 'auto_delete': True,
                 'initialize_params': {
+                    'disk_name': disk_name,  # Include the disk name
                     'disk_type': f"projects/{self.target_project}/zones/{zone}/diskTypes/{disk_type}",
                     'disk_size_gb': disk_size_gb,
                     'source_image': source_image if source_image != 'N/A' else None

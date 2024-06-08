@@ -43,13 +43,15 @@ class GetDetails:
             disk_type = self.get_disk_type(zone, disk_name) if disk_name != '' else 'N/A'
             disk_image = self.get_disk_image(disk_name, zone) if disk_name != '' else 'N/A'
             disk_details = {
-                'type': disk_type,
+                'diskName': disk_name,
+                'image': disk_image,
+                'diskSizeGb': disk.get('diskSizeGb', 10),
                 'deviceName': device_name,
+                'type': disk_type,
                 'mode': disk.get('mode', 'N/A'),
                 'boot': disk.get('boot', 'N/A'),
                 'interface': disk.get('interface', 'N/A'),
-                'diskSizeGb': disk.get('diskSizeGb', 10),  # Include disk size
-                'image': disk_image,
+
             }
             formatted_disks.append(disk_details)
         return formatted_disks
