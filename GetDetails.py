@@ -51,7 +51,6 @@ class GetDetails:
                 'mode': disk.get('mode', 'N/A'),
                 'boot': disk.get('boot', 'N/A'),
                 'interface': disk.get('interface', 'N/A'),
-
             }
             formatted_disks.append(disk_details)
         return formatted_disks
@@ -80,6 +79,7 @@ class GetDetails:
                         'network_interfaces': self.format_network_interfaces(
                             asset.resource.data.get('networkInterfaces', [])),
                         'disks': self.format_disks(asset.resource.data.get('disks', []), zone),
+                        'tags': asset.resource.data.get('tags', {}).get('items', [])
                     }
                 else:
                     instance_details = {
@@ -96,7 +96,6 @@ class GetDetails:
 
 
 if __name__ == '__main__':
-
     logging.basicConfig(level=logging.INFO)
     source_project = 'wideops-support-393412'
     get_details = GetDetails(source_project)

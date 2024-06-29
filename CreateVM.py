@@ -7,11 +7,12 @@ class VMCreator:
     def __init__(self, target_project):
         self.target_project = target_project
         self.compute_client = compute_v1.InstancesClient()
+        self.existing_instances_details = []
 
     def clone_instances_to_target_project(self, instances_details):
         for instance_detail in instances_details:
             if "gke" in instance_detail['name'].lower():
-                logging.info(f"Skipping instance {instance_detail['name']} as it origin from GKE")
+                logging.info(f"Skipping instance {instance_detail['name']} as it originates from GKE")
                 continue
             if self.instance_exists(instance_detail['name'], instance_detail['zone']):
                 logging.info(f"Instance {instance_detail['name']} already exists in zone {instance_detail['zone']}. Skipping creation.")
@@ -20,15 +21,14 @@ class VMCreator:
 
     def instance_exists(self, instance_name, zone):
         try:
-            self.compute_client.get(project=self.target_project, zone=zone, instance=instance_name)
+            instance = self.compute_client.get(project=self.target_project, zone=zone, instance=instance_name)
+            self.existing_instances_details.append(instance)
             return True
         except NotFound:
             return False
         except Exception as e:
             logging.error(f"An error occurred while checking if instance '{instance_name}' exists: {e}")
             return False
-
-    logging.basicConfig(level=logging.INFO)
 
     def create_vm_instance(self, instance_detail):
         zone = instance_detail['zone']
@@ -60,13 +60,11 @@ class VMCreator:
                 'device_name': device_name
             }
 
-            # Remove source_image if it is 'N/A' to avoid errors
             if disk_config['initialize_params']['source_image'] is None:
                 del disk_config['initialize_params']['source_image']
 
             disks.append(disk_config)
 
-        # Prepare network interfaces configuration
         network_interfaces = [
             {
                 'network': f"projects/{self.target_project}/global/networks/{ni['network']}",
@@ -74,12 +72,14 @@ class VMCreator:
             } for ni in instance_detail['network_interfaces']
         ]
 
-        # Create the VM instance
         instance_body = {
             'name': instance_detail['name'],
             'machine_type': f"zones/{zone}/machineTypes/{instance_detail['machine_type']}",
             'disks': disks,
-            'network_interfaces': network_interfaces
+            'network_interfaces': network_interfaces,
+            'tags': {
+                'items': instance_detail.get('tags', [])
+            }
         }
 
         try:
@@ -89,8 +89,9 @@ class VMCreator:
         except Exception as e:
             logging.error(f"An error occurred while creating the instance '{instance_detail['name']}': {e}")
 
-
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
+
     source_project_id = 'wideops-support-393412'
     target_project_id = 'wideops-internal-web-services'
 
