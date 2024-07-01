@@ -39,6 +39,15 @@ class CloudRunCreator:
             containers=containers
         )
 
+
+        container_resources = service_detail['container_resources']
+        cpu = container_resources['cpu']
+        memory = container_resources['memory']
+
+        resources = run_v2.ResourceRequirements(
+            limits={'cpu': cpu, 'memory': memory}
+        )
+
         service = run_v2.Service(
             template=template,
             ingress=run_v2.IngressTraffic.INGRESS_TRAFFIC_ALL
