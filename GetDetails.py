@@ -117,14 +117,30 @@ class GetDetails:
 
                     containers = spec.get('template', {}).get('spec', {}).get('containers', [])
                     container_images = [container.get('image', 'N/A') for container in containers]
+                    container_resources = {
+                        'cpu': containers[0].get('resources', {}).get('limits', {}).get('cpu', 'N/A'),
+                        'memory': containers[0].get('resources', {}).get('limits', {}).get('memory', 'N/A')
+                    } if containers else {'cpu': 'N/A', 'memory': 'N/A'}
+
+                    startup_probe = containers[0].get('startupProbe', {}) if containers else {}
+                    startup_probe_details = {
+                        'failureThreshold': startup_probe.get('failureThreshold', 'N/A'),
+                        'periodSeconds': startup_probe.get('periodSeconds', 'N/A'),
+                        'tcpSocketPort': startup_probe.get('tcpSocket', {}).get('port', 'N/A'),
+                        'timeoutSeconds': startup_probe.get('timeoutSeconds', 'N/A')
+                    } if startup_probe else {
+                        'failureThreshold': 'N/A',
+                        'periodSeconds': 'N/A',
+                        'tcpSocketPort': 'N/A',
+                        'timeoutSeconds': 'N/A'
+                    }
 
                     cloud_run_details = {
                         'name': metadata.get('name', 'N/A'),
                         'location': metadata.get('labels', {}).get('cloud.googleapis.com/location', 'N/A'),
                         'url': status.get('address', {}).get('url', 'N/A'),
                         'ingress': metadata.get('annotations', {}).get('run.googleapis.com/ingress', 'N/A'),
-                        'ingress_status': metadata.get('annotations', {}).get('run.googleapis.com/ingress-status',
-                                                                              'N/A'),
+                        'ingress_status': metadata.get('annotations', {}).get('run.googleapis.com/ingress-status', 'N/A'),
                         'operation_id': metadata.get('annotations', {}).get('run.googleapis.com/operation-id', 'N/A'),
                         'api_version': data.get('apiVersion', 'N/A'),
                         'kind': data.get('kind', 'N/A'),
@@ -133,7 +149,15 @@ class GetDetails:
                         'percent_traffic': status.get('traffic', [{}])[0].get('percent', 'N/A'),
                         'latest_created_revision_name': status.get('latestCreatedRevisionName', 'N/A'),
                         'latest_ready_revision_name': status.get('latestReadyRevisionName', 'N/A'),
-                        'container_images': container_images
+                        'container_images': container_images,
+                        'container_concurrency': spec.get('containerConcurrency', 'N/A'),
+                        'max_scale': metadata.get('annotations', {}).get('autoscaling.knative.dev/maxScale', 'N/A'),
+                        'client_name': metadata.get('annotations', {}).get('run.googleapis.com/client-name'),
+                        'client_version': metadata.get('annotations', {}).get('run.googleapis.com/client-version', 'N/A'),
+                        'startup_cpu_boost': metadata.get('annotations', {}).get('run.googleapis.com/startup-cpu-boost', 'N/A'),
+                        'timeout_seconds': spec.get('template', {}).get('spec', {}).get('timeoutSeconds', 'N/A'),
+                        'container_resources': container_resources,
+                        'startup_probe_details': startup_probe_details
                     }
                 else:
                     cloud_run_details = {
@@ -154,12 +178,10 @@ if __name__ == '__main__':
     source_project = 'wideops-support-393412'
     get_details = GetDetails(source_project)
 
-    instance_details_list = get_details.get_instance_details()
-    for instance_details in instance_details_list:
-        print(instance_details)
 
 
     # Get Cloud Run details
     cloud_run_details_list = get_details.get_cloud_run_details()
     for cloud_run_details in cloud_run_details_list:
         print(cloud_run_details)
+
