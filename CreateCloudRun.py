@@ -2,6 +2,7 @@ import logging
 from google.cloud import run_v2
 from GetDetails import GetDetails
 from google.api_core.exceptions import NotFound
+from google.cloud import resourcemanager_v3
 
 
 class CloudRunCreator:
@@ -11,11 +12,6 @@ class CloudRunCreator:
 
     def create_cloud_run_services(self, cloud_run_details):
         for service_detail in cloud_run_details:
-            # Check if the service originated from a Cloud Function
-            if any("gcf-artifacts" in image for image in service_detail['container_images']):
-                logging.info(f"Service {service_detail['name']} originated from a Cloud Function. Skipping creation.")
-                continue
-
             if self.service_exists(service_detail['name'], service_detail['location']):
                 logging.info(
                     f"Service {service_detail['name']} already exists in location {service_detail['location']}. Skipping creation.")
@@ -71,14 +67,13 @@ class CloudRunCreator:
             logging.info(f"Service {service_name} created successfully.")
         except Exception as e:
             logging.error(f"An error occurred while creating the service '{service_name}': {e}")
-            self.delete_cloud_run_service(service_name, location)
 
-    def delete_cloud_run_service(self, service_name, location):
-        try:
-            self.run_client.delete_service(
-                name=f"projects/{self.target_project}/locations/{location}/services/{service_name}")
-        except Exception as e:
-            logging.error(f"An error occurred while deleting the service '{service_name}': {e}")
+    def get_source_service_account_email(self, target_project):
+        client = resourcemanager_v3.ProjectsClient()
+        project = client.get_project(name=f"projects/{target_project}")
+        project_number = project.name.split('/')[-1]
+        print(project_number)
+        return f"service-{project_number}@serverless-robot-prod.iam.gserviceaccount.com"
 
 
 if __name__ == '__main__':
@@ -91,4 +86,5 @@ if __name__ == '__main__':
     cloud_run_details = get_details.get_cloud_run_details()
 
     cloud_run_creator = CloudRunCreator(target_project=target_project_id)
-    cloud_run_creator.create_cloud_run_services(cloud_run_details)
+    cloud_run_creator.get_source_service_account_email(target_project_id)
+    # cloud_run_creator.create_cloud_run_services(cloud_run_details)
