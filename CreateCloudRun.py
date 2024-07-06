@@ -1,5 +1,4 @@
 import logging
-
 from google.api_core.exceptions import NotFound
 from google.cloud import run_v2
 from GetDetails import GetDetails
@@ -22,7 +21,6 @@ class CloudRunCreator:
                 logging.info(
                     f"Service {service_detail['name']} already exists in location {service_detail['location']}. Skipping creation.")
                 continue
-
             self.create_cloud_run_service(service_detail)
 
     def service_exists(self, service_name, location):
@@ -73,6 +71,7 @@ class CloudRunCreator:
             logging.info(f"Service {service_name} created successfully.")
         except Exception as e:
             logging.error(f"An error occurred while creating the service '{service_name}': {e}")
+            logging.info(f"Service {service_name} created with an error!")
 
     def get_source_service_account_email(self):
         project = self.iam_client.get_project(name=f"projects/{self.target_project}")
@@ -109,7 +108,7 @@ if __name__ == '__main__':
 
     source_project_id = 'wideops-support-393412'
     target_project_id = 'wideops-internal-web-services'
-    
+
     get_details = GetDetails(source_project=source_project_id)
     cloud_run_details = get_details.get_cloud_run_details()
 
