@@ -122,21 +122,31 @@ class CloudRunCreator:
                     if self.source_project not in image:
                         continue
                     try:
-                        image_parts = image.split('/')
-                        location = image_parts[0]
-                        source_repository = image_parts[-2]
-                        name_and_tag = image_parts[-1].split(':')
-                        name = name_and_tag[0]
-                        image_tag = name_and_tag[1] if len(
-                            name_and_tag) > 1 else 'latest'  # Tag is the second part if available, else 'latest'
+                        if image.startswith('gcr.io'):
+                            # Handling gcr.io format
+                            parts = image.split('/')
+                            location = 'us'  
+                            source_repository = parts[2]
+                            name_and_tag = parts[3].split(':')
+                            name = name_and_tag[0]
+                            image_tag = name_and_tag[1] if len(name_and_tag) > 1 else 'latest'
+                            target_repository = f'gcr.io/{self.target_project}/{source_repository}'
+                        else:
+                            # Handling Artifact Registry format
+                            image_parts = image.split('/')
+                            location = image_parts[0]
+                            source_repository = image_parts[-2]
+                            name_and_tag = image_parts[-1].split(':')
+                            name = name_and_tag[0]
+                            image_tag = name_and_tag[1] if len(name_and_tag) > 1 else 'latest'
+                            target_repository = f'{location}/{self.target_project}/{source_repository}'
+                            self.ensure_repository_exists(location.split('-')[0] + '-' + location.split('-')[1], source_repository)# Tag is the second part if available, else 'latest'
 
-                        self.ensure_repository_exists(location.split('-')[0] + '-' + location.split('-')[1], source_repository)
 
                         # Pull
                         subprocess.run(['docker', 'pull', image], check=True)
 
                         # Tag
-                        target_repository = f'{location}/{self.target_project}/{source_repository}'
                         subprocess.run(['docker', 'tag', image, f'{target_repository}/{name}:{image_tag}'], check=True)
 
                         # Push
@@ -203,4 +213,3 @@ if __name__ == '__main__':
 
     cloud_run_creator = CloudRunCreator(target_project=target_project_id, source_project=source_project_id)
     cloud_run_creator.create_cloud_run_services(cloud_run_details)
-
