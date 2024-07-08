@@ -1,21 +1,27 @@
+import subprocess
+
 import logging
 from google.api_core.exceptions import NotFound
 from google.cloud import run_v2
-from GetDetails import GetDetails
 from google.cloud import resourcemanager_v3
 from google.iam.v1 import iam_policy_pb2 as iam_policy
 from google.iam.v1 import policy_pb2 as policy
+from GetDetails import GetDetails
+
 
 class CloudRunCreator:
     def __init__(self, target_project, source_project):
         self.target_project = target_project
         self.source_project = source_project
+        self.get_details = GetDetails(source_project)
         self.run_client = run_v2.ServicesClient()
         self.iam_client = resourcemanager_v3.ProjectsClient()
 
     def create_cloud_run_services(self, cloud_run_details):
         email = self.get_source_service_account_email()
         self.grant_artifact_registry_reader_role(email)
+        self.copy_images_to_target_project()
+
         for service_detail in cloud_run_details:
             if self.service_exists(service_detail['name'], service_detail['location']):
                 logging.info(
@@ -103,13 +109,43 @@ class CloudRunCreator:
 
         logging.info(f"Granted Artifact Registry Reader role to {email}")
 
+    def copy_images_to_target_project(self):
+        cloud_run_details_list = self.get_details.get_cloud_run_details()
+
+        for cloud_run_details in cloud_run_details_list:
+            if 'container_images' in cloud_run_details:
+                for image in cloud_run_details['container_images']:
+                    try:
+                        # Parse image URL to extract components
+                        image_parts = image.split('/')
+                        location = image_parts[0]  # Location is the first part
+                        source_repository = image_parts[-2]  # Assuming repository is the second last part
+                        name_and_tag = image_parts[-1].split(':')  # Split name and tag by ':'
+                        name = name_and_tag[0]  # Name is the first part after splitting by ':'
+                        image_tag = name_and_tag[1] if len(name_and_tag) > 1 else 'latest'  # Tag is the second part if available, else 'latest'
+
+                        # Pull image from source Artifact Registry
+                        subprocess.run(['docker', 'pull', image], check=True)
+
+                        # Tag the pulled image for the target Artifact Registry
+                        target_repository = f'{location}/{self.target_project}/{source_repository}'
+                        subprocess.run(['docker', 'tag', image, f'{target_repository}/{name}:{image_tag}'], check=True)
+
+                        # Push tagged image to target Artifact Registry
+                        subprocess.run(['docker', 'push', f'{target_repository}/{name}:{image_tag}'], check=True)
+
+                        logging.info(f"Image {image} copied to target project successfully with tag '{image_tag}'.")
+                    except subprocess.CalledProcessError as e:
+                        logging.error(f"Error while copying image {image}: {e}")
+
+
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 
     source_project_id = 'wideops-support-393412'
     target_project_id = 'wideops-internal-web-services'
-
     get_details = GetDetails(source_project=source_project_id)
+
     cloud_run_details = get_details.get_cloud_run_details()
 
     cloud_run_creator = CloudRunCreator(target_project=target_project_id, source_project=source_project_id)
