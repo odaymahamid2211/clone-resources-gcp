@@ -1,11 +1,13 @@
 import subprocess
 import logging
-from google.api_core.exceptions import NotFound
+from google.api_core.exceptions import NotFound, AlreadyExists
 from google.cloud import run_v2
 from google.cloud import resourcemanager_v3
 from google.iam.v1 import iam_policy_pb2 as iam_policy
 from google.iam.v1 import policy_pb2 as policy
 from GetDetails import GetDetails
+from google.cloud import artifactregistry_v1beta2
+
 
 class CloudRunCreator:
     def __init__(self, target_project, source_project):
@@ -15,10 +17,11 @@ class CloudRunCreator:
         self.run_client = run_v2.ServicesClient()
         self.iam_client = resourcemanager_v3.ProjectsClient()
         self.user_choice = self.prompt_user_choice()
+        self.artifact_registry_client = artifactregistry_v1beta2.ArtifactRegistryClient()
 
     def create_cloud_run_services(self, cloud_run_details):
         if self.user_choice == 'copy_images':
-            self.copy_images_to_target_project()
+            self.copy_images_to_target_project(cloud_run_details)
         elif self.user_choice == 'grant_role':
             email = self.get_source_service_account_email()
             self.grant_artifact_registry_reader_role(email)
@@ -90,7 +93,7 @@ class CloudRunCreator:
     def grant_artifact_registry_reader_role(self, email):
         policy_client = resourcemanager_v3.ProjectsClient()
 
-        # Get the current IAM policy for the source project
+
         request = iam_policy.GetIamPolicyRequest(resource=f"projects/{self.source_project}")
         current_policy = policy_client.get_iam_policy(request=request)
 
@@ -100,10 +103,8 @@ class CloudRunCreator:
             members=[f"serviceAccount:{email}"],
         )
 
-        # Append the new binding to the current policy
         current_policy.bindings.append(binding)
 
-        # Set the updated policy
         set_policy_request = iam_policy.SetIamPolicyRequest(
             resource=f"projects/{self.source_project}",
             policy=current_policy,
@@ -112,8 +113,8 @@ class CloudRunCreator:
 
         logging.info(f"Granted Artifact Registry Reader role to {email}")
 
-    def copy_images_to_target_project(self):
-        cloud_run_details_list = self.get_details.get_cloud_run_details()
+    def copy_images_to_target_project(self,cloud_run_details):
+        cloud_run_details_list = cloud_run_details
 
         for cloud_run_details in cloud_run_details_list:
             if 'container_images' in cloud_run_details:
@@ -122,25 +123,59 @@ class CloudRunCreator:
                         continue
                     try:
                         image_parts = image.split('/')
-                        location = image_parts[0]  # Location is the first part
-                        source_repository = image_parts[-2]  # Assuming repository is the second last part
-                        name_and_tag = image_parts[-1].split(':')  # Split name and tag by ':'
-                        name = name_and_tag[0]  # Name is the first part after splitting by ':'
-                        image_tag = name_and_tag[1] if len(name_and_tag) > 1 else 'latest'  # Tag is the second part if available, else 'latest'
+                        location = image_parts[0]
+                        source_repository = image_parts[-2]
+                        name_and_tag = image_parts[-1].split(':')
+                        name = name_and_tag[0]
+                        image_tag = name_and_tag[1] if len(
+                            name_and_tag) > 1 else 'latest'  # Tag is the second part if available, else 'latest'
 
-                        # Pull image from source Artifact Registry
+                        self.ensure_repository_exists(location.split('-')[0] + '-' + location.split('-')[1], source_repository)
+
+                        # Pull
                         subprocess.run(['docker', 'pull', image], check=True)
 
-                        # Tag the pulled image for the target Artifact Registry
+                        # Tag
                         target_repository = f'{location}/{self.target_project}/{source_repository}'
                         subprocess.run(['docker', 'tag', image, f'{target_repository}/{name}:{image_tag}'], check=True)
 
-                        # Push tagged image to target Artifact Registry
+                        # Push
                         subprocess.run(['docker', 'push', f'{target_repository}/{name}:{image_tag}'], check=True)
 
                         logging.info(f"Image {image} copied to target project successfully with tag '{image_tag}'.")
                     except subprocess.CalledProcessError as e:
                         logging.error(f"Error while copying image {image}: {e}")
+
+    def ensure_repository_exists(self, location, repository_name):
+
+        repository_path = f"projects/{self.target_project}/locations/{location}/repositories/{repository_name}"
+        try:
+            self.artifact_registry_client.get_repository(name=repository_path)
+        except NotFound:
+            self.create_repository(location, repository_name)
+
+    def create_repository(self, location, repository_name):
+        parent = f'projects/{self.target_project}/locations/{location}'
+
+        repository_id = repository_name.lower().replace("_", "-")
+
+        repository = artifactregistry_v1beta2.Repository(
+            name=f'{parent}/repositories/{repository_id}',
+            format='DOCKER'
+        )
+
+        try:
+            response = self.artifact_registry_client.create_repository(
+                parent=parent,
+                repository=repository,
+                repository_id=repository_id
+            )
+            logging.info(f"Repository {repository_name} created in {location}.")
+        except AlreadyExists:
+            logging.info(f"Repository {repository_name} already exists in {location}.")
+        except Exception as e:
+            logging.error(f"Error creating repository: {e}")
+
 
     def prompt_user_choice(self):
         print("Choose an option:")
@@ -168,3 +203,4 @@ if __name__ == '__main__':
 
     cloud_run_creator = CloudRunCreator(target_project=target_project_id, source_project=source_project_id)
     cloud_run_creator.create_cloud_run_services(cloud_run_details)
+
