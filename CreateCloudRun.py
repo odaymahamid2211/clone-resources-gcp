@@ -1,5 +1,4 @@
 import subprocess
-
 import logging
 from google.api_core.exceptions import NotFound
 from google.cloud import run_v2
@@ -8,7 +7,6 @@ from google.iam.v1 import iam_policy_pb2 as iam_policy
 from google.iam.v1 import policy_pb2 as policy
 from GetDetails import GetDetails
 
-
 class CloudRunCreator:
     def __init__(self, target_project, source_project):
         self.target_project = target_project
@@ -16,11 +14,14 @@ class CloudRunCreator:
         self.get_details = GetDetails(source_project)
         self.run_client = run_v2.ServicesClient()
         self.iam_client = resourcemanager_v3.ProjectsClient()
+        self.user_choice = self.prompt_user_choice()
 
     def create_cloud_run_services(self, cloud_run_details):
-        email = self.get_source_service_account_email()
-        self.grant_artifact_registry_reader_role(email)
-        self.copy_images_to_target_project()
+        if self.user_choice == 'copy_images':
+            self.copy_images_to_target_project()
+        elif self.user_choice == 'grant_role':
+            email = self.get_source_service_account_email()
+            self.grant_artifact_registry_reader_role(email)
 
         for service_detail in cloud_run_details:
             if self.service_exists(service_detail['name'], service_detail['location']):
@@ -47,6 +48,8 @@ class CloudRunCreator:
 
         containers = []
         for image in service_detail['container_images']:
+            if self.user_choice == 'copy_images':
+                image = image.replace(self.source_project, self.target_project)
             container = run_v2.Container(image=image)
             containers.append(container)
 
@@ -115,8 +118,9 @@ class CloudRunCreator:
         for cloud_run_details in cloud_run_details_list:
             if 'container_images' in cloud_run_details:
                 for image in cloud_run_details['container_images']:
+                    if self.source_project not in image:
+                        continue
                     try:
-                        # Parse image URL to extract components
                         image_parts = image.split('/')
                         location = image_parts[0]  # Location is the first part
                         source_repository = image_parts[-2]  # Assuming repository is the second last part
@@ -137,6 +141,20 @@ class CloudRunCreator:
                         logging.info(f"Image {image} copied to target project successfully with tag '{image_tag}'.")
                     except subprocess.CalledProcessError as e:
                         logging.error(f"Error while copying image {image}: {e}")
+
+    def prompt_user_choice(self):
+        print("Choose an option:")
+        print("1. Copy images to the Artifact Registry in the target project")
+        print("2. Use the images from Artifact registry in the source project")
+        choice = input("Enter 1 or 2: ")
+
+        if choice == '1':
+            return 'copy_images'
+        elif choice == '2':
+            return 'grant_role'
+        else:
+            print("Invalid choice. Please enter 1 or 2.")
+            return self.prompt_user_choice()
 
 
 if __name__ == '__main__':
