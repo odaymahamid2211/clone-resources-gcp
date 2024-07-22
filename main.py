@@ -52,8 +52,7 @@ def main():
         cloud_run_details = get_details.get_cloud_run_details()
         print("\nCloud Run services to be copied:")
         for service in cloud_run_details:
-            print(
-                f"Service Name: {service['name']}, Image: {service['image']}, Memory: {service.get('memory', 'N/A')}, CPU: {service.get('cpu', 'N/A')}")
+            print(f"Service Name: {service['name']},Location: {service['location']}")
 
         # Proceed with copying Cloud Run services
         cloud_run_creator = CloudRunCreator(target_project=target_project_id, source_project=source_project_id)
