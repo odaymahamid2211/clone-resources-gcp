@@ -7,6 +7,8 @@ class VMCreator:
     def __init__(self, target_project):
         self.target_project = target_project
         self.compute_client = compute_v1.InstancesClient()
+        self.network_client = compute_v1.NetworksClient()
+        self.subnetwork_client = compute_v1.SubnetworksClient()  # Added SubnetworksClient
         self.existing_instances_details = []
 
     def clone_instances_to_target_project(self, instances_details):
@@ -28,6 +30,26 @@ class VMCreator:
             return False
         except Exception as e:
             logging.error(f"An error occurred while checking if instance '{instance_name}' exists: {e}")
+            return False
+
+    def vpc_exists(self, vpc_name):
+        try:
+            self.network_client.get(project=self.target_project, network=vpc_name)
+            return True
+        except NotFound:
+            return False
+        except Exception as e:
+            logging.error(f"An error occurred while checking if VPC '{vpc_name}' exists: {e}")
+            return False
+
+    def subnet_exists(self, subnet_name, region):
+        try:
+            self.subnetwork_client.get(project=self.target_project, region=region, subnetwork=subnet_name)
+            return True
+        except NotFound:
+            return False
+        except Exception as e:
+            logging.error(f"An error occurred while checking if Subnetwork '{subnet_name}' exists in region {region}: {e}")
             return False
 
     def create_vm_instance(self, instance_detail):
@@ -65,12 +87,20 @@ class VMCreator:
 
             disks.append(disk_config)
 
-        network_interfaces = [
-            {
-                'network': f"projects/{self.target_project}/global/networks/{ni['network']}",
-                'subnetwork': f"regions/{region}/subnetworks/{ni['subnetwork']}"
-            } for ni in instance_detail['network_interfaces']
-        ]
+        # Check if the specified network exists, else use the default network
+        network_interfaces = []
+        for ni in instance_detail['network_interfaces']:
+            network_name = ni['network']
+            if not self.vpc_exists(network_name):
+                network_name = 'default'
+            subnet_name = ni['subnetwork']
+            if not self.subnet_exists(subnet_name, region):
+                subnet_name = 'default'
+            network_interface = {
+                'network': f"projects/{self.target_project}/global/networks/{network_name}",
+                'subnetwork': f"regions/{region}/subnetworks/{subnet_name}"
+            }
+            network_interfaces.append(network_interface)
 
         instance_body = {
             'name': instance_detail['name'],
