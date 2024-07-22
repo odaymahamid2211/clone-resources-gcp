@@ -3,6 +3,7 @@ from google.cloud import compute_v1
 from GetDetails import GetDetails
 from google.api_core.exceptions import NotFound
 
+
 class VMCreator:
     def __init__(self, target_project):
         self.target_project = target_project
@@ -42,6 +43,25 @@ class VMCreator:
             logging.error(f"An error occurred while checking if VPC '{vpc_name}' exists: {e}")
             return False
 
+    def create_vpc(self, vpc_name):
+        """Create a VPC network if it does not exist."""
+        network_body = {
+            "name": vpc_name,
+            "auto_create_subnetworks": False,  # We'll handle subnet creation separately
+            "routing_config": {"routing_mode": "REGIONAL"}
+        }
+        try:
+            operation = self.network_client.insert(
+                project=self.target_project,
+                network_resource=network_body
+            )
+            operation.result()
+            logging.info(f"VPC '{vpc_name}' created successfully in project {self.target_project}.")
+            return True
+        except Exception as e:
+            logging.error(f"An error occurred while creating VPC '{vpc_name}': {e}")
+            return False
+
     def subnet_exists(self, subnet_name, region):
         try:
             self.subnetwork_client.get(project=self.target_project, region=region, subnetwork=subnet_name)
@@ -50,6 +70,27 @@ class VMCreator:
             return False
         except Exception as e:
             logging.error(f"An error occurred while checking if Subnetwork '{subnet_name}' exists in region {region}: {e}")
+            return False
+
+    def create_subnet(self, subnet_name, region, vpc_name, ip_cidr_range="10.0.0.0/24"):
+        """Create a subnet within the specified VPC."""
+        subnet_body = {
+            "name": subnet_name,
+            "network": f"projects/{self.target_project}/global/networks/{vpc_name}",
+            "ip_cidr_range": ip_cidr_range,
+            "region": region
+        }
+        try:
+            operation = self.subnetwork_client.insert(
+                project=self.target_project,
+                region=region,
+                subnetwork_resource=subnet_body
+            )
+            operation.result()
+            logging.info(f"Subnet '{subnet_name}' created successfully in region {region}.")
+            return True
+        except Exception as e:
+            logging.error(f"An error occurred while creating Subnetwork '{subnet_name}' in region {region}: {e}")
             return False
 
     def create_vm_instance(self, instance_detail):
@@ -92,10 +133,14 @@ class VMCreator:
         for ni in instance_detail['network_interfaces']:
             network_name = ni['network']
             if not self.vpc_exists(network_name):
-                network_name = 'default'
+                logging.info(f"VPC '{network_name}' does not exist. Creating it.")
+                if not self.create_vpc(network_name):
+                    logging.warning(f"Failed to create VPC '{network_name}'. Using the default network instead.")
+                    network_name = 'default'
             subnet_name = ni['subnetwork']
             if not self.subnet_exists(subnet_name, region):
-                subnet_name = 'default'
+                logging.info(f"Subnetwork '{subnet_name}' does not exist in region {region}. Creating it.")
+                self.create_subnet(subnet_name, region, network_name)
             network_interface = {
                 'network': f"projects/{self.target_project}/global/networks/{network_name}",
                 'subnetwork': f"regions/{region}/subnetworks/{subnet_name}"
@@ -118,6 +163,7 @@ class VMCreator:
             logging.info(f"Instance {instance_detail['name']} created successfully.")
         except Exception as e:
             logging.error(f"An error occurred while creating the instance '{instance_detail['name']}': {e}")
+
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
