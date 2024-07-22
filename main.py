@@ -1,16 +1,35 @@
-# This is a sample Python script.
-
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+import logging
+from GetDetails import GetDetails
+from CreateCloudRun import CloudRunCreator
+from CreateVM import VMCreator
 
 
-# Press the green button in the gutter to run the script.
+def main():
+    logging.basicConfig(level=logging.INFO)
+
+    print("Welcome to the GCP Service Copier!")
+    source_project_id = input("Please enter the source project ID: ")
+    target_project_id = input("Please enter the target project ID: ")
+
+    print("Choose the service you want to copy:")
+    print("1. Copy Cloud Run services")
+    print("2. Copy VM instances")
+    service_choice = input("Enter 1 or 2: ")
+
+    if service_choice == '1':
+        get_details = GetDetails(source_project=source_project_id)
+        cloud_run_details = get_details.get_cloud_run_details()
+
+        cloud_run_creator = CloudRunCreator(target_project=target_project_id, source_project=source_project_id)
+        cloud_run_creator.create_cloud_run_services(cloud_run_details)
+    elif service_choice == '2':
+        get_details = GetDetails(source_project=source_project_id)
+        instances_details = get_details.get_instance_details()
+
+        vm_creator = VMCreator(target_project=target_project_id)
+        vm_creator.clone_instances_to_target_project(instances_details)
+    else:
+        print("Invalid choice. Please enter 1 or 2.")
+
 if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    main()
