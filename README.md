@@ -36,6 +36,8 @@ This repository contains Python scripts for cloning Google Cloud Platform (GCP) 
    pip install google-cloud-resourcemanager
    pip install google-api-core
    pip install google-iam
+   pip install rich
+
 
 2. Configure Docker to authenticate with Google Cloud Artifact Registry:
   ```bash
@@ -43,14 +45,3 @@ This repository contains Python scripts for cloning Google Cloud Platform (GCP) 
 
   Replace [region] with the region of your Artifact Registry.
    
-
-
-
-
-
-
-
-
-
-
-
