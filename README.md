@@ -40,8 +40,11 @@ This repository contains Python scripts for cloning Google Cloud Platform (GCP) 
 
 
 2. Configure Docker to authenticate with Google Cloud Artifact Registry:
+   
+   Replace [region] with the region of your Artifact Registry.
+   
   ```bash
   gcloud auth configure-docker [region]-docker.pkg.dev
 
-  Replace [region] with the region of your Artifact Registry.
+
    
